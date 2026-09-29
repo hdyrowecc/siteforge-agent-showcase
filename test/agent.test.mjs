@@ -79,3 +79,33 @@ test('already-aborted request performs no model or tool calls', async () => with
   assert.equal(result.status, 'cancelled');
   assert.equal(result.calls, 0);
 }));
+
+
+test('a symlink to an internal file remains readable through a checked file handle', async (t) =>
+  withWorkspace(async (dir, tools) => {
+    try {
+      await symlink(join(dir, 'index.html'), join(dir, 'internal.html'));
+    } catch (error) {
+      if (process.platform === 'win32' && ['EPERM', 'EACCES', 'ENOTSUP'].includes(error?.code)) {
+        t.skip('Windows denied symlink creation; Linux CI runs the file handle check');
+        return;
+      }
+      throw error;
+    }
+    const result = await tools.read_project_file({ path: 'internal.html' });
+    assert.match(result.content, /Sample Headline/);
+  }));
+
+test('oversized source files are rejected before reads, edits, and checks', async () =>
+  withWorkspace(async (dir, tools) => {
+    const huge = '<h1>' + 'A'.repeat(70_000) + '</h1>';
+    await writeFile(join(dir, 'index.html'), huge);
+    await assert.rejects(tools.read_project_file({ path: 'index.html' }),
+      error => error.code === 'FILE_LIMIT');
+    await assert.rejects(tools.replace_in_file({
+      path: 'index.html', oldText: 'A', newText: 'B'
+    }), error => error.code === 'FILE_LIMIT');
+    await assert.rejects(tools.run_project_check({ path: 'index.html', expectedText: 'A' }),
+      error => error.code === 'FILE_LIMIT');
+    assert.equal(await readFile(join(dir, 'index.html'), 'utf8'), huge);
+  }));
