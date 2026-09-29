@@ -75,3 +75,53 @@ test('failed observed operations produce sanitized failure spans and still throw
   });
   assert.equal(JSON.stringify(trace.snapshot()).includes('raw customer'), false);
 });
+
+
+test('partially recorded input is not presented as complete model usage', () => {
+  const report = analyzeTrace({ durationMs: 50, spans: [
+    { phase: 'model', startMs: 0, durationMs: 20,
+      attributes: { inputTokens: 100, outputTokens: 0 } },
+    { phase: 'model', startMs: 20, durationMs: 30,
+      attributes: { outputTokens: 25 } }
+  ] });
+  assert.deepEqual(report.tokenUsage, {
+    inputTokens: null,
+    outputTokens: 25,
+    totalTokens: null,
+    knownInputTokens: 100,
+    knownOutputTokens: 25,
+    recordedInputSpans: 1,
+    recordedOutputSpans: 2,
+    recordedModelSpans: 1,
+    modelSpans: 2,
+    completeness: 'partial'
+  });
+});
+
+test('an explicitly reported zero is distinct from an unreported output', () => {
+  const zero = analyzeTrace({ durationMs: 10, spans: [
+    { phase: 'model', startMs: 0, durationMs: 10,
+      attributes: { inputTokens: 0, outputTokens: 0 } }
+  ] });
+  assert.equal(zero.tokenUsage.totalTokens, 0);
+  assert.equal(zero.tokenUsage.completeness, 'complete');
+  const unknown = analyzeTrace({ durationMs: 10, spans: [
+    { phase: 'model', startMs: 0, durationMs: 10,
+      attributes: { inputTokens: 100 } }
+  ] });
+  assert.equal(unknown.tokenUsage.inputTokens, 100);
+  assert.equal(unknown.tokenUsage.outputTokens, null);
+  assert.equal(unknown.tokenUsage.totalTokens, null);
+  assert.equal(unknown.tokenUsage.completeness, 'partial');
+});
+
+test('unrecorded usage never becomes a zero-token metric', () => {
+  const result = analyzeTrace({ durationMs: 10, spans: [
+    { phase: 'model', startMs: 0, durationMs: 10, attributes: { outcome: 'success' } }
+  ] });
+  assert.equal(result.tokenUsage.inputTokens, null);
+  assert.equal(result.tokenUsage.outputTokens, null);
+  assert.equal(result.tokenUsage.totalTokens, null);
+  assert.equal(result.tokenUsage.knownInputTokens, null);
+  assert.equal(result.tokenUsage.completeness, 'unrecorded');
+});
