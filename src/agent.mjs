@@ -71,6 +71,11 @@ export async function runAgent({ instruction, model, tools, requiredChecks = [],
     };
   }
 
+  const stopped = turns => ({
+    status: signal?.reason?.code === 'DEADLINE_EXCEEDED' ? 'timed_out' : 'cancelled',
+    trace, calls, turns
+  });
+
   for (let turn = 1; turn <= maxTurns; turn++) {
     if (signal?.aborted) return { status: 'cancelled', trace, calls, turns: turn - 1 };
     const decision = await model.next(messages, TOOL_SCHEMAS, { signal });
