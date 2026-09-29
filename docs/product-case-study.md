@@ -1,6 +1,6 @@
 # CrossWeb AI · 从真实产品到可验证工程案例
 
-[体验真实产品](https://www.crosswebai.com/) · [回到仓库首页](../README.md) · [Trace / Eval 技术展示](trace-and-eval.md)
+[体验真实产品](https://www.crosswebai.com/) · [回到仓库首页](../README.md) · [Trace / Eval 技术展示](trace-and-eval.md) · [可复现结果与 CI 报告](evidence-report.md)
 
 ## 产品是什么
 

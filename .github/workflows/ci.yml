@@ -18,3 +18,31 @@ jobs:
       - run: npm run trace:demo
       - run: npm run trace:synthetic
       - run: npm run eval:demo
+      - name: Create reproducible offline evidence
+        shell: bash
+        run: |
+          mkdir -p artifacts
+          node examples/trace-demo.mjs > artifacts/trace-offline.json
+          node examples/trace-demo.mjs --synthetic > artifacts/trace-illustrative.json
+          node examples/eval-suite.mjs > artifacts/eval-controlled.json
+          node --input-type=module -e "
+            import { readFileSync } from 'node:fs';
+            import assert from 'node:assert/strict';
+            const json = name => JSON.parse(readFileSync('artifacts/' + name + '.json', 'utf8'));
+            const actual = json('trace-offline');
+            const illustrative = json('trace-illustrative');
+            const evaluation = json('eval-controlled');
+            assert.equal(actual.source, 'actual-offline-synthetic-fixture');
+            assert.equal(actual.outcome, 'verified');
+            assert.equal(illustrative.trace.source, 'invented-illustrative-data-not-a-real-run');
+            assert.equal(evaluation.dataset, 'controlled-synthetic');
+            assert.equal(evaluation.summary.total, 5);
+            assert.equal(evaluation.summary.allExpectationsMet, true);
+          "
+      - name: Attach sanitized reproducible evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: sanitized-offline-evidence
+          path: artifacts/*.json
+          retention-days: 30
+          if-no-files-found: error

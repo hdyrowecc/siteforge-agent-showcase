@@ -1,6 +1,6 @@
 # Trace + Eval 工程展示｜Observability & Evaluation
 
-[返回 README](../README.md) · [真实产品架构范围](product-case-study.md)
+[返回 README](../README.md) · [真实产品架构范围](product-case-study.md) · [可复现结果与 CI 报告](evidence-report.md)
 
 > **公开范围：** Trace / Eval 均为独立编写、使用合成数据的可运行示例，用于展示工程设计思路；不是商业源码、客户运行记录、线上效果报告，也不能代替真实模型或浏览器评测。
 
