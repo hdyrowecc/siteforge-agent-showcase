@@ -44,7 +44,9 @@ export async function runAgent({ instruction, model, tools, requiredChecks = [],
     const contractSatisfied = [...goals].every(([path, expected]) =>
       editedFiles.has(path) && checkedFiles.get(path) === expected);
     return {
-      verified: allEditedChecked && contractSatisfied,
+      verified: goals.size > 0 && allEditedChecked && contractSatisfied,
+      selfChecked: allEditedChecked,
+      contractProvided: goals.size > 0,
       changedFiles: [...editedFiles],
       checkedFiles: [...checkedFiles.keys()],
       unmetChecks: [...goals.keys()].filter(path => !editedFiles.has(path) || checkedFiles.get(path) !== goals.get(path))
