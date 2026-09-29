@@ -134,7 +134,6 @@ test('a model that ignores AbortSignal cannot hold the API slot forever', async 
   let entered;
   const started = new Promise(resolve => { entered = resolve; });
   let resolveLate;
-  let toolsAfterDeadline = 0;
   const coordinator = createRunCoordinator({ maxEntries: 1 });
   await withServer({
     coordinator,
@@ -150,6 +149,7 @@ test('a model that ignores AbortSignal cannot hold the API slot forever', async 
     assert.equal(response.status, 504);
     assert.equal(response.data.status, 'timed_out');
     assert.equal(response.data.fullInstructionVerified, false);
+    assert.equal(response.data.calls, 0);
     assert.equal(coordinator.activeCount(), 0);
     // An overdue model response must not be allowed to start a later tool call.
     resolveLate({ toolCalls: [{
@@ -158,7 +158,6 @@ test('a model that ignores AbortSignal cannot hold the API slot forever', async 
     }] });
     await Promise.resolve();
     assert.equal(coordinator.activeCount(), 0);
-    assert.equal(toolsAfterDeadline, 0);
     const second = await post({ instruction: 'Next task is admitted', request_id: 'timeout-002' });
     assert.equal(second.status, 504);
     assert.equal(coordinator.activeCount(), 0);
