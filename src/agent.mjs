@@ -77,8 +77,9 @@ export async function runAgent({ instruction, model, tools, requiredChecks = [],
   });
 
   for (let turn = 1; turn <= maxTurns; turn++) {
-    if (signal?.aborted) return { status: 'cancelled', trace, calls, turns: turn - 1 };
-    const decision = await model.next(messages, TOOL_SCHEMAS, { signal });
+    if (signal?.aborted) return stopped(turn - 1);
+    const decision = await nextOrAbort(() => model.next(messages, TOOL_SCHEMAS, { signal }), signal);
+    if (decision === INTERRUPTED || signal?.aborted) return stopped(turn - 1);
     if (!decision || typeof decision !== 'object') throw new AgentConfigurationError('Model adapter returned invalid data');
     const actions = Array.isArray(decision.toolCalls) ? decision.toolCalls : [];
     if (actions.length === 0) {
