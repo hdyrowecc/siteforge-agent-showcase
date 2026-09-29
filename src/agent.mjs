@@ -137,7 +137,7 @@ export async function runAgent({ instruction, model, tools, requiredChecks = [],
             checkedFiles.delete(args.path); // a failed or irrelevant check cannot certify the route
           }
         }
-       } catch (error) {
+      } catch (error) {
         if (signal?.aborted) {
           calls++;
           trace.push({ turn, tool: String(action.name).slice(0, 70),
