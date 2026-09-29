@@ -41,6 +41,7 @@ function send(res, status, body) {
 export function createShowcaseServer({
   liveMode = process.env.AGENT_MODE === 'live',
   modelFactory = () => liveMode ? createLiveModel() : createMockModel(),
+  toolsFactory = createProjectTools,
   coordinator = createRunCoordinator(),
   timeoutMs = 45_000
 } = {}) {
@@ -87,7 +88,7 @@ export function createShowcaseServer({
       try {
         await cp(FIXTURE_DIR, workspace, { recursive: true });
         const result = await runAgent({
-          instruction, model: modelFactory(), tools: createProjectTools(workspace),
+          instruction, model: modelFactory(), tools: toolsFactory(workspace),
           requiredChecks: checks, signal: controller.signal
         });
         const status = result.status === 'timed_out' ? 'timed_out' : liveMode
