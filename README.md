@@ -1,13 +1,27 @@
 # CrossWeb AI · AI Coding Agent 工程展示
 
-**真实产品 + 脱敏工程案例。** CrossWeb AI 是对话式 AI 建站产品；本仓库是独立编写的可运行技术示例，展示部分 Agent 与 Node.js 后端设计，**不是商业项目完整源码，也不能代表真实模型的线上任务成功率**。
+**一个实际运行的对话式 AI 建站产品 + 可复现的脱敏 Agent 工程案例。** 用户可以在 [CrossWeb AI](https://www.crosswebai.com/) 通过对话新建网站，并在已有项目中继续修改。此仓库展示其中的 Node.js Agent 设计、工具安全边界、执行恢复、Trace 与 Eval；示例源码为独立编写，并非私有商业产品的完整代码。
 
-- **实际产品体验：** https://www.crosswebai.com （可用性以实际部署为准）
+**[直接体验实际产品 →](https://www.crosswebai.com/)** · **[查看产品架构与工程取舍 →](docs/product-case-study.md)** · **[查看 Trace / Eval 证据 →](docs/trace-and-eval.md)**
 - **产品架构与工程取舍：** [docs/product-case-study.md](docs/product-case-study.md)
 - **执行循环与工具边界：** [src/agent.mjs](src/agent.mjs) · [src/tools.mjs](src/tools.mjs)
 - **运行协调与安全测试：** [src/run-coordinator.mjs](src/run-coordinator.mjs) · [test/](test/)
 - **Trace（链路追踪）：** [示例源码](src/trace.mjs) · [真实离线运行](examples/trace-demo.mjs) · [技术说明](docs/trace-and-eval.md)
 - **Eval（证据驱动评测）：** [评测引擎](src/evaluation.mjs) · [五个受控案例](examples/eval-suite.mjs) · [自动化测试](test/eval.test.mjs)
+
+## 招聘者 5 分钟浏览路线
+
+1. **看实际产品：** 打开 [CrossWeb AI](https://www.crosswebai.com/)，用自然语言创建网站，并尝试在同一项目上追加修改。无需安装本仓库；网站当前可用性、注册和用量以实际页面为准。
+2. **看架构设计：** 阅读 [产品案例](docs/product-case-study.md)，重点了解多轮修改、用户目标验收、运行状态及成本控制问题；商业实现不在此仓库。
+3. **看关键代码：** [Agent Loop](src/agent.mjs) 使用调用方提供的目标检查契约，防止只检查最后一个页面就误报完成；[工具边界](src/tools.mjs) 限制操作范围；[回归测试](test/goal-verification.test.mjs) 提供反例。
+4. **看可复现证据：** 在 Node.js 20+ 环境执行以下命令，无需 API Key、数据库或 E2B：
+
+       npm test
+       npm run demo
+       npm run trace:demo
+       npm run eval:demo
+
+想快速验证产品旅程时，可用自拟的测试需求先生成一个小网站，再在**同一项目**内要求局部修改，观察原有导航和未指定部分是否保留。这是供招聘者亲自尝试的建议操作，**不是对每次线上任务结果的保证**。
 
 ## 三个可复现的工程案例
 
@@ -17,7 +31,7 @@
 | **根据工具错误调整执行** | 观察到 AMBIGUOUS_EDIT 后收窄编辑范围，重新执行验证；不能仅凭模型声称完成 |
 | **Node.js 后端请求幂等** | 同一请求 ID 并发时只执行一次，相同 ID 携带不同参数会触发冲突 |
 
-以上均使用合成网页和确定性离线模型适配器，方便招聘者无密钥重复运行。真实 LLM、E2B 执行、数据库项目状态、浏览器审核及 Vercel 发布属于私有产品，**不在示例中伪装实现**。
+上述三个源码案例都使用合成网页和确定性离线模型适配器，便于招聘者无密钥重复运行。**真实产品可直接通过上方网站体验；公开代码不冒充实际模型的线上执行过程。**真实 LLM、E2B 执行、数据库任务状态、浏览器审核及 Vercel 发布的商业实现未公开。
 
 ## Trace 与 Eval：运行分析及可复现评测
 
