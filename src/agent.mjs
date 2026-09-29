@@ -2,9 +2,9 @@ import { TOOL_SCHEMAS, ToolError } from './tools.mjs';
 
 export class AgentConfigurationError extends Error {}
 
-// Abort stops waiting for an uncooperative model, not the model's own side effects.
+// Abort stops waiting for uncooperative model/tool promises, not their external side effects.
 const INTERRUPTED = Symbol('interrupted');
-async function nextOrAbort(invoke, signal) {
+async function awaitOrAbort(invoke, signal) {
   if (!signal) return invoke();
   if (signal.aborted) return INTERRUPTED;
   let listener;
@@ -14,7 +14,7 @@ async function nextOrAbort(invoke, signal) {
   });
   try {
     if (signal.aborted) return INTERRUPTED;
-    return await Promise.race([Promise.resolve().then(invoke), cancellation]);
+    return await Promise.race([Promise.resolve().then(() => signal.aborted ? INTERRUPTED : invoke()), cancellation]);
   } finally {
     signal.removeEventListener('abort', listener);
   }
@@ -80,7 +80,7 @@ export async function runAgent({ instruction, model, tools, requiredChecks = [],
     if (signal?.aborted) return stopped(turn - 1);
     let decision;
     try {
-      decision = await nextOrAbort(() => model.next(messages, TOOL_SCHEMAS, { signal }), signal);
+      decision = await awaitOrAbort(() => model.next(messages, TOOL_SCHEMAS, { signal }), signal);
     } catch (error) {
       if (signal?.aborted) return stopped(turn - 1);
       throw error;
@@ -114,8 +114,16 @@ export async function runAgent({ instruction, model, tools, requiredChecks = [],
           if (!(key in args)) throw new ToolError('INVALID_ARGUMENT', 'Missing ' + key);
         for (const [key, val] of Object.entries(args))
           if (!(key in props) || typeof val !== 'string') throw new ToolError('INVALID_ARGUMENT', 'Unexpected or invalid ' + key);
-        const value = await tools[action.name](args);
-        if (signal?.aborted) return stopped(turn);
+        const value = await awaitOrAbort(() => tools[action.name](args, { signal }), signal);
+        if (value === INTERRUPTED || signal?.aborted) {
+          // A started tool counts against the call budget even if its promise
+          // never settles. Do not trust late evidence or dispatch later tools.
+          calls++;
+          trace.push({ turn, tool: String(action.name).slice(0, 70),
+            outcome: signal?.reason?.code === 'DEADLINE_EXCEEDED' ? 'timed_out' : 'cancelled',
+            durationMs: Date.now() - startedAt });
+          return stopped(turn);
+        }
         outcome = { ok: true, value };
         if (action.name === 'replace_in_file' && value?.changed === true) {
           editedFiles.add(args.path);
@@ -130,6 +138,13 @@ export async function runAgent({ instruction, model, tools, requiredChecks = [],
           }
         }
       } catch (error) {
+        if (signal?.aborted) {
+          calls++;
+          trace.push({ turn, tool: String(action.name).slice(0, 70),
+            outcome: signal?.reason?.code === 'DEADLINE_EXCEEDED' ? 'timed_out' : 'cancelled',
+            durationMs: Date.now() - startedAt });
+          return stopped(turn);
+        }
         outcome = { ok: false, error: { code: error.code || 'TOOL_ERROR',
           message: String(error.message || 'Unknown failure').slice(0, 180) } };
         if (action.name === 'run_project_check' && typeof action.args?.path === 'string')

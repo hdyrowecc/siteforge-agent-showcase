@@ -168,3 +168,38 @@ test('rejects invalid API deadline configuration', () => {
   assert.throws(() => createShowcaseServer({ timeoutMs: 0 }), RangeError);
   assert.throws(() => createShowcaseServer({ timeoutMs: NaN }), RangeError);
 });
+
+
+test('HTTP deadline frees capacity when a custom tool ignores cancellation', async () => {
+  const coordinator = createRunCoordinator({ maxEntries: 1 });
+  let readsStarted = 0;
+  let downstreamEdits = 0;
+  await withServer({
+    coordinator,
+    timeoutMs: 45,
+    modelFactory: () => ({ next: async () => ({ toolCalls: [
+      { id: 'blocked-read', name: 'read_project_file', args: { path: 'index.html' } },
+      { id: 'never-edit', name: 'replace_in_file',
+        args: { path: 'index.html', oldText: 'Sample Headline', newText: 'Unexpected edit' } }
+    ] }) }),
+    toolsFactory: () => ({
+      read_project_file: () => {
+        readsStarted++;
+        return new Promise(() => {}); // intentionally ignores AbortSignal
+      },
+      replace_in_file: () => { downstreamEdits++; throw new Error('must not run'); }
+    })
+  }, async post => {
+    const first = await post({ instruction: 'Blocked tool, first request', request_id: 'blocked-tool-001' });
+    assert.equal(first.status, 504);
+    assert.equal(first.data.status, 'timed_out');
+    assert.equal(first.data.calls, 1);
+    assert.equal(first.data.trace[0].outcome, 'timed_out');
+    assert.equal(coordinator.activeCount(), 0);
+    const next = await post({ instruction: 'Blocked tool, second request', request_id: 'blocked-tool-002' });
+    assert.equal(next.status, 504, 'second request is admitted after the first releases capacity');
+    assert.equal(readsStarted, 2);
+    assert.equal(downstreamEdits, 0);
+    assert.equal(coordinator.activeCount(), 0);
+  });
+});
