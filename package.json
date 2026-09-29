@@ -1,0 +1,17 @@
+{
+  "name": "siteforge-agent-showcase",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Independent, sanitized and runnable coding-Agent portfolio example",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "demo": "node examples/showcase.mjs",
+    "start": "node src/server.mjs",
+    "test": "node --test test/*.test.mjs examples/*.test.mjs",
+    "check": "node --check src/agent.mjs && node --check src/tools.mjs && node --check src/provider.mjs && node --check src/server.mjs && node --check src/run-coordinator.mjs",
+    "demo:basic": "node src/demo.mjs"
+  }
+}
