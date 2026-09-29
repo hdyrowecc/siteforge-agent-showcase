@@ -2,6 +2,24 @@ import { TOOL_SCHEMAS, ToolError } from './tools.mjs';
 
 export class AgentConfigurationError extends Error {}
 
+// Abort stops waiting for an uncooperative model, not the model's own side effects.
+const INTERRUPTED = Symbol('interrupted');
+async function nextOrAbort(invoke, signal) {
+  if (!signal) return invoke();
+  if (signal.aborted) return INTERRUPTED;
+  let listener;
+  const cancellation = new Promise(resolve => {
+    listener = () => resolve(INTERRUPTED);
+    signal.addEventListener('abort', listener, { once: true });
+  });
+  try {
+    if (signal.aborted) return INTERRUPTED;
+    return await Promise.race([Promise.resolve().then(invoke), cancellation]);
+  } finally {
+    signal.removeEventListener('abort', listener);
+  }
+}
+
 function normalizeRequiredChecks(requiredChecks) {
   if (!Array.isArray(requiredChecks)) throw new AgentConfigurationError('requiredChecks must be an array');
   const goals = new Map();
