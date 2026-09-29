@@ -81,3 +81,83 @@ test('ordinary user cancellation remains distinct from a deadline', async () => 
   });
   assert.equal(result.status, 'cancelled');
 });
+
+
+test('a blocked tool releases the Agent wait on deadline and cannot supply late evidence', () =>
+  withFixture(async dir => {
+    const controller = new AbortController();
+    const original = createProjectTools(dir);
+    let entered;
+    const started = new Promise(resolve => { entered = resolve; });
+    let release;
+    let laterToolsStarted = 0;
+    let capturedSignal;
+    const tools = {
+      ...original,
+      read_project_file: (_args, options) => {
+        capturedSignal = options.signal;
+        entered();
+        return new Promise(resolve => { release = resolve; });
+      },
+      replace_in_file: () => { laterToolsStarted++; throw new Error('must not run'); }
+    };
+    let modelCalls = 0;
+    const model = { next: async () => {
+      modelCalls++;
+      return { toolCalls: [
+        { id: 'blocked-read', name: 'read_project_file', args: { path: 'index.html' } },
+        { id: 'should-not-edit', name: 'replace_in_file',
+          args: { path: 'index.html', oldText: 'Sample Headline', newText: 'Late title' } }
+      ] };
+    } };
+    const pending = runAgent({
+      instruction: 'Inspect and edit the fixture',
+      model, tools, signal: controller.signal,
+      requiredChecks: [{ path: 'index.html', expectedText: 'Late title' }]
+    });
+    await started;
+    assert.equal(capturedSignal, controller.signal, 'custom tools receive the cancellation signal');
+    controller.abort({ code: 'DEADLINE_EXCEEDED' });
+    const result = await pending;
+    assert.equal(result.status, 'timed_out');
+    assert.equal(result.calls, 1, 'the attempted tool counts against the budget');
+    assert.deepEqual(result.trace.map(t => [t.tool, t.outcome]),
+      [['read_project_file', 'timed_out']]);
+    assert.equal(modelCalls, 1);
+    assert.equal(laterToolsStarted, 0);
+
+    release({ path: 'index.html', content: '<h1>Late title</h1>' });
+    await Promise.resolve();
+    assert.equal(laterToolsStarted, 0, 'late tool output cannot restart Agent execution');
+    assert.doesNotMatch(await readFile(join(dir, 'index.html'), 'utf8'), /Late title/);
+  }));
+
+test('user cancellation of a pending tool is distinct from the deadline', () =>
+  withFixture(async dir => {
+    const controller = new AbortController();
+    let entered;
+    const started = new Promise(resolve => { entered = resolve; });
+    let rejectLate;
+    const tools = {
+      ...createProjectTools(dir),
+      read_project_file: () => {
+        entered();
+        return new Promise((_, reject) => { rejectLate = reject; });
+      }
+    };
+    const pending = runAgent({
+      instruction: 'Read a file', signal: controller.signal, tools,
+      model: { next: async () => ({ toolCalls: [
+        { id: 'waiting-read', name: 'read_project_file', args: { path: 'index.html' } }
+      ] }) }
+    });
+    await started;
+    controller.abort('stopped by caller');
+    const result = await pending;
+    assert.equal(result.status, 'cancelled');
+    assert.equal(result.calls, 1);
+    assert.equal(result.trace[0].outcome, 'cancelled');
+    // A late rejection remains handled by the original raced promise.
+    rejectLate(new Error('late underlying tool failure'));
+    await Promise.resolve();
+  }));
