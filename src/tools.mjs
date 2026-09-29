@@ -15,6 +15,26 @@ function requireString(value, name, max = 300) {
   return value;
 }
 
+// Bounded fixture text extraction, not a general HTML parser or browser assertion.
+// Ignore inline heading markup, decode common entities, and normalize whitespace.
+function normalizeH1Text(value) {
+  const named = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: '\u00a0' };
+  return String(value)
+    .replace(/<[^>]*>/g, '')
+    .replace(/&(?:amp|lt|gt|quot|apos|nbsp|#\d+|#x[0-9a-f]+);/gi, entity => {
+      const name = entity.slice(1, -1).toLowerCase();
+      if (name in named) return named[name];
+      const codepoint = name.startsWith('#x')
+        ? parseInt(name.slice(2), 16)
+        : parseInt(name.slice(1), 10);
+      return codepoint > 0 && codepoint <= 0x10ffff &&
+        !(codepoint >= 0xd800 && codepoint <= 0xdfff)
+        ? String.fromCodePoint(codepoint) : entity;
+    })
+    .replace(/\s+/gu, ' ')
+    .trim();
+}
+
 export function createProjectTools(workspaceDirectory) {
   let rootPromise;
   const root = () => (rootPromise ??= realpath(resolve(workspaceDirectory)));
@@ -70,7 +90,12 @@ export function createProjectTools(workspaceDirectory) {
       const expected = expectedText === undefined ? null : requireString(expectedText, 'expectedText');
       const errors = [];
       if (headings.length !== 1) errors.push('Expected exactly one H1 element');
-      if (expected && (!headings.length || !headings[0][1].includes(expected))) errors.push('Expected H1 text missing');
+      if (expected !== null) {
+        const targetHeading = normalizeH1Text(expected);
+        if (!targetHeading) throw new ToolError('INVALID_ARGUMENT', 'expectedText must contain visible text');
+        if (!headings.length || normalizeH1Text(headings[0][1]) !== targetHeading)
+          errors.push('Expected H1 text does not match exactly');
+      }
       if (!source.includes('</html>')) errors.push('HTML document has no closing html tag');
       return { path, passed: errors.length === 0, errors, check: 'bounded-fixture-html-check' };
     }
