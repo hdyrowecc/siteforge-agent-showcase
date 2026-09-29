@@ -15,7 +15,8 @@ async function withWorkspace(fn) {
 }
 
 test('agent actually edits and verifies a demo site', async () => withWorkspace(async (dir, tools) => {
-  const result = await runAgent({ instruction: 'Change the H1 and check it', model: createMockModel(), tools });
+  const result = await runAgent({ instruction: 'Change the H1 and check it', model: createMockModel(), tools,
+    requiredChecks: [{ path: 'index.html', expectedText: 'Welcome to the AI Agent Showcase' }] });
   assert.equal(result.status, 'verified');
   assert.equal(result.calls, 3);
   assert.deepEqual(result.trace.map(t => t.tool), ['read_project_file', 'replace_in_file', 'run_project_check']);
