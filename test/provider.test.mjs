@@ -71,8 +71,13 @@ test('provider enforces its own deadline even when the caller supplies a live si
       });
     }
   });
-  await assert.rejects(model.next([], [], { signal: controller.signal }),
-    error => error?.name === 'TimeoutError');
+  // AbortSignal.timeout() uses an unref'ed timer in Node 20. Keep the test
+  // worker alive while the mocked transport awaits the deadline.
+  const keepAlive = setTimeout(() => {}, 500);
+  try {
+    await assert.rejects(model.next([], [], { signal: controller.signal }),
+      error => error?.name === 'TimeoutError');
+  } finally { clearTimeout(keepAlive); }
   assert.equal(controller.signal.aborted, false);
   assert.equal(observedSignal.aborted, true);
 });
