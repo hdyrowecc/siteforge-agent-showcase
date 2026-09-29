@@ -2,6 +2,24 @@ import { TOOL_SCHEMAS, ToolError } from './tools.mjs';
 
 export class AgentConfigurationError extends Error {}
 
+// Abort stops waiting for an uncooperative model, not the model's own side effects.
+const INTERRUPTED = Symbol('interrupted');
+async function nextOrAbort(invoke, signal) {
+  if (!signal) return invoke();
+  if (signal.aborted) return INTERRUPTED;
+  let listener;
+  const cancellation = new Promise(resolve => {
+    listener = () => resolve(INTERRUPTED);
+    signal.addEventListener('abort', listener, { once: true });
+  });
+  try {
+    if (signal.aborted) return INTERRUPTED;
+    return await Promise.race([Promise.resolve().then(invoke), cancellation]);
+  } finally {
+    signal.removeEventListener('abort', listener);
+  }
+}
+
 function normalizeRequiredChecks(requiredChecks) {
   if (!Array.isArray(requiredChecks)) throw new AgentConfigurationError('requiredChecks must be an array');
   const goals = new Map();
@@ -44,22 +62,37 @@ export async function runAgent({ instruction, model, tools, requiredChecks = [],
     const contractSatisfied = [...goals].every(([path, expected]) =>
       editedFiles.has(path) && checkedFiles.get(path) === expected);
     return {
-      verified: allEditedChecked && contractSatisfied,
+      verified: goals.size > 0 && allEditedChecked && contractSatisfied,
+      selfChecked: allEditedChecked,
+      contractProvided: goals.size > 0,
       changedFiles: [...editedFiles],
       checkedFiles: [...checkedFiles.keys()],
       unmetChecks: [...goals.keys()].filter(path => !editedFiles.has(path) || checkedFiles.get(path) !== goals.get(path))
     };
   }
 
+  const stopped = turns => ({
+    status: signal?.reason?.code === 'DEADLINE_EXCEEDED' ? 'timed_out' : 'cancelled',
+    trace, calls, turns
+  });
+
   for (let turn = 1; turn <= maxTurns; turn++) {
-    if (signal?.aborted) return { status: 'cancelled', trace, calls, turns: turn - 1 };
-    const decision = await model.next(messages, TOOL_SCHEMAS, { signal });
+    if (signal?.aborted) return stopped(turn - 1);
+    let decision;
+    try {
+      decision = await nextOrAbort(() => model.next(messages, TOOL_SCHEMAS, { signal }), signal);
+    } catch (error) {
+      if (signal?.aborted) return stopped(turn - 1);
+      throw error;
+    }
+    if (decision === INTERRUPTED || signal?.aborted) return stopped(turn - 1);
     if (!decision || typeof decision !== 'object') throw new AgentConfigurationError('Model adapter returned invalid data');
     const actions = Array.isArray(decision.toolCalls) ? decision.toolCalls : [];
     if (actions.length === 0) {
       const evidence = completionEvidence();
       return {
-        status: evidence.verified ? 'verified' : 'unverified',
+        status: evidence.verified ? 'verified'
+          : evidence.selfChecked && !evidence.contractProvided ? 'self_checked' : 'unverified',
         answer: String(decision.text || (evidence.verified ? 'Verified.' : 'Insufficient verification evidence.')),
         verification: evidence, trace, calls, turns: turn
       };
@@ -71,7 +104,7 @@ export async function runAgent({ instruction, model, tools, requiredChecks = [],
       const startedAt = Date.now();
       let outcome;
       try {
-        if (signal?.aborted) return { status: 'cancelled', trace, calls, turns: turn };
+        if (signal?.aborted) return stopped(turn);
         const schema = TOOL_SCHEMAS.find(s => s.function.name === action.name);
         if (!schema || typeof tools[action.name] !== 'function') throw new ToolError('UNKNOWN_TOOL', 'Tool is not available');
         const args = action.args;
@@ -82,6 +115,7 @@ export async function runAgent({ instruction, model, tools, requiredChecks = [],
         for (const [key, val] of Object.entries(args))
           if (!(key in props) || typeof val !== 'string') throw new ToolError('INVALID_ARGUMENT', 'Unexpected or invalid ' + key);
         const value = await tools[action.name](args);
+        if (signal?.aborted) return stopped(turn);
         outcome = { ok: true, value };
         if (action.name === 'replace_in_file' && value?.changed === true) {
           editedFiles.add(args.path);

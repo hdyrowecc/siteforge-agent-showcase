@@ -110,12 +110,13 @@ export function analyzeTrace(trace) {
     const phase = phases.find(p => active.some(s => s.phase === p)) || 'other';
     attribution[phase] += points[i] - points[i - 1];
   }
+  const truncated = Number(trace?.discardedSpans) > 0;
   const modelSpans = valid.filter(s => s.phase === 'model');
   const recorded = key => {
     const withMetric = modelSpans.filter(s => Number.isSafeInteger(s.attributes?.[key]) && s.attributes[key] >= 0);
     const known = withMetric.reduce((sum, s) => sum + s.attributes[key], 0);
     return {
-      value: modelSpans.length > 0 && withMetric.length === modelSpans.length ? known : null,
+      value: !truncated && modelSpans.length > 0 && withMetric.length === modelSpans.length ? known : null,
       known: withMetric.length > 0 ? known : null,
       count: withMetric.length
     };
@@ -125,7 +126,8 @@ export function analyzeTrace(trace) {
   const completeSpans = modelSpans.filter(s =>
     Number.isSafeInteger(s.attributes?.inputTokens) && s.attributes.inputTokens >= 0 &&
     Number.isSafeInteger(s.attributes?.outputTokens) && s.attributes.outputTokens >= 0).length;
-  const completeness = modelSpans.length > 0 && completeSpans === modelSpans.length ? 'complete'
+  const completeness = truncated ? 'truncated'
+    : modelSpans.length > 0 && completeSpans === modelSpans.length ? 'complete'
     : input.count > 0 || output.count > 0 ? 'partial' : 'unrecorded';
 
   return {

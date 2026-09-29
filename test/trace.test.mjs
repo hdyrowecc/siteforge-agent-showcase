@@ -125,3 +125,34 @@ test('unrecorded usage never becomes a zero-token metric', () => {
   assert.equal(result.tokenUsage.knownInputTokens, null);
   assert.equal(result.tokenUsage.completeness, 'unrecorded');
 });
+
+
+test('dropped spans invalidate complete-looking token totals', () => {
+  const analysis = analyzeTrace({
+    durationMs: 10, discardedSpans: 1,
+    spans: [{ phase: 'model', startMs: 0, durationMs: 10,
+      attributes: { inputTokens: 100, outputTokens: 20 } }]
+  });
+  assert.equal(analysis.tokenUsage.completeness, 'truncated');
+  assert.equal(analysis.tokenUsage.inputTokens, null);
+  assert.equal(analysis.tokenUsage.outputTokens, null);
+  assert.equal(analysis.tokenUsage.totalTokens, null);
+  assert.equal(analysis.tokenUsage.knownInputTokens, 100);
+  assert.equal(analysis.tokenUsage.knownOutputTokens, 20);
+  assert.equal(analysis.discardedSpans, 1);
+});
+
+test('a bounded trace with a dropped model span cannot claim exact usage', () => {
+  let time = 0;
+  const trace = createSafeTrace({ maxSpans: 1, clock: () => time });
+  trace.record({ phase: 'model', startMs: 0, durationMs: 5,
+    attributes: { inputTokens: 8, outputTokens: 1 } });
+  trace.record({ phase: 'model', startMs: 5, durationMs: 5,
+    attributes: { inputTokens: 99, outputTokens: 99 } });
+  time = 10;
+  const result = analyzeTrace(trace.snapshot());
+  assert.equal(result.tokenUsage.completeness, 'truncated');
+  assert.equal(result.tokenUsage.totalTokens, null);
+  assert.equal(result.tokenUsage.knownInputTokens, 8);
+  assert.equal(result.tokenUsage.modelSpans, 1);
+});

@@ -59,4 +59,4 @@ Eval 不应只检查模型是否说“完成”，也不能把自动化测试通
 
 ### Token 完整性判定
 
-`tokenUsage.completeness` 可能是 `complete`、`partial` 或 `unrecorded`。只有本次所有模型 Span 都有输入和输出用量时，`totalTokens` 才是明确数字（包括真实记录的零）；如果只有部分 Span 上报用量，准确的完整总量保持 `null`。`knownInputTokens`、`knownOutputTokens` 及对应的记录 Span 数仅表示已知的部分和，不等于总体成本。
+`tokenUsage.completeness` 可能是 `complete`、`partial`、`unrecorded` 或 `truncated`（Span 达到上限且发生丢弃）。出现 `truncated` 时，即使保留的模型 Span 都有 Token 数据，完整输入、输出与总用量也必须保持 `null`，只可显示已记录的部分和。只有本次所有模型 Span 都有输入和输出用量时，`totalTokens` 才是明确数字（包括真实记录的零）；如果只有部分 Span 上报用量，准确的完整总量保持 `null`。`knownInputTokens`、`knownOutputTokens` 及对应的记录 Span 数仅表示已知的部分和，不等于总体成本。

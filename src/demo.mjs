@@ -11,7 +11,8 @@ try {
   const model = process.argv.includes('--live') ? createLiveModel() : createMockModel();
   const result = await runAgent({
     instruction: 'Read index.html, change the H1 to Welcome to the AI Agent Showcase, and verify the edit.',
-    model, tools: createProjectTools(workspace)
+    model, tools: createProjectTools(workspace),
+    requiredChecks: [{ path: 'index.html', expectedText: 'Welcome to the AI Agent Showcase' }]
   });
   console.log(JSON.stringify({ ...result, finalHtml: await readFile(join(workspace, 'index.html'), 'utf8') }, null, 2));
   if (result.status !== 'verified') process.exitCode = 1;

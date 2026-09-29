@@ -128,3 +128,43 @@ test('keyed requests deduplicate during active work, even at full capacity', asy
     assert.equal(startedCount, 1);
   });
 });
+
+
+test('a model that ignores AbortSignal cannot hold the API slot forever', async () => {
+  let entered;
+  const started = new Promise(resolve => { entered = resolve; });
+  let resolveLate;
+  const coordinator = createRunCoordinator({ maxEntries: 1 });
+  await withServer({
+    coordinator,
+    timeoutMs: 25,
+    modelFactory: () => ({ async next() {
+      entered();
+      return new Promise(resolve => { resolveLate = resolve; });
+    } })
+  }, async post => {
+    const first = post({ instruction: 'Wait forever on the model', request_id: 'timeout-001' });
+    await started;
+    const response = await first;
+    assert.equal(response.status, 504);
+    assert.equal(response.data.status, 'timed_out');
+    assert.equal(response.data.fullInstructionVerified, false);
+    assert.equal(response.data.calls, 0);
+    assert.equal(coordinator.activeCount(), 0);
+    // An overdue model response must not be allowed to start a later tool call.
+    resolveLate({ toolCalls: [{
+      id: 'late-tool', name: 'replace_in_file',
+      args: { path: 'index.html', oldText: 'Sample Headline', newText: 'Late mutation' }
+    }] });
+    await Promise.resolve();
+    assert.equal(coordinator.activeCount(), 0);
+    const second = await post({ instruction: 'Next task is admitted', request_id: 'timeout-002' });
+    assert.equal(second.status, 504);
+    assert.equal(coordinator.activeCount(), 0);
+  });
+});
+
+test('rejects invalid API deadline configuration', () => {
+  assert.throws(() => createShowcaseServer({ timeoutMs: 0 }), RangeError);
+  assert.throws(() => createShowcaseServer({ timeoutMs: NaN }), RangeError);
+});
