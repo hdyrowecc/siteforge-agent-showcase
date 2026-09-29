@@ -1,6 +1,6 @@
 # 可复现结果 | Trace & Eval Evidence
 
-[返回 README](../README.md) · [技术设计](trace-and-eval.md) · [GitHub Actions 运行与报告](../actions/workflows/ci.yml)
+[返回 README](../README.md) · [技术设计](trace-and-eval.md) · [GitHub Actions 运行与报告](https://github.com/hdyrowecc/siteforge-agent-showcase/actions/workflows/ci.yml)
 
 这页提供一条简短的**证据核验路径**：本仓库自动化测试真正执行了什么、观察到了什么，以及哪些数据仅供解释概念。它不是私有 CrossWeb AI 产品的线上性能报告。
 
