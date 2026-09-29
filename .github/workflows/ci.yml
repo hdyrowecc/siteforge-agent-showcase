@@ -8,17 +8,22 @@ jobs:
   test:
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: ['20', '24']
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '24'
-      - run: npm test
+          node-version: ${{ matrix.node-version }}
+      - run: npm run test:coverage
       - run: npm run check
       - run: npm run trace:demo
       - run: npm run trace:synthetic
       - run: npm run eval:demo
       - name: Create reproducible offline evidence
+        if: matrix.node-version == '24'
         shell: bash
         run: |
           mkdir -p artifacts
@@ -40,6 +45,7 @@ jobs:
             assert.equal(evaluation.summary.allExpectationsMet, true);
           "
       - name: Attach sanitized reproducible evidence
+        if: matrix.node-version == '24'
         uses: actions/upload-artifact@v4
         with:
           name: sanitized-offline-evidence

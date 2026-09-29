@@ -11,10 +11,11 @@
     "demo": "node examples/showcase.mjs",
     "start": "node src/server.mjs",
     "test": "node --test test/*.test.mjs examples/*.test.mjs",
-    "check": "node --check src/agent.mjs && node --check src/tools.mjs && node --check src/provider.mjs && node --check src/server.mjs && node --check src/run-coordinator.mjs && node --check src/trace.mjs && node --check src/evaluation.mjs && node --check examples/trace-demo.mjs && node --check examples/eval-suite.mjs",
+    "check": "node --check src/agent.mjs && node --check src/tools.mjs && node --check src/provider.mjs && node --check src/server.mjs && node --check src/run-coordinator.mjs && node --check src/trace.mjs && node --check src/evaluation.mjs && node --check examples/trace-demo.mjs && node --check examples/eval-suite.mjs && node --check test/server.test.mjs",
     "demo:basic": "node src/demo.mjs",
     "trace:demo": "node examples/trace-demo.mjs",
     "trace:synthetic": "node examples/trace-demo.mjs --synthetic",
-    "eval:demo": "node examples/eval-suite.mjs"
+    "eval:demo": "node examples/eval-suite.mjs",
+    "test:coverage": "node --experimental-test-coverage --test test/*.test.mjs examples/*.test.mjs"
   }
 }

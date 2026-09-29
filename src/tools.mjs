@@ -1,4 +1,5 @@
-import { readFile, realpath, rename, stat, writeFile, rm } from 'node:fs/promises';
+import { open, realpath, rename, stat, writeFile, rm } from 'node:fs/promises';
+import { constants } from 'node:fs';
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { randomUUID } from 'node:crypto';
 
@@ -57,10 +58,33 @@ export function createProjectTools(workspaceDirectory) {
     return target;
   }
 
+  // Open a handle after path validation: O_NOFOLLOW prevents a final-component
+  // symlink swap on POSIX, and fstat validates the descriptor actually read.
+  // This reduces pathname races; it is not an openat-based sandbox for
+  // directories concurrently mutated by an untrusted external process.
+  async function readCheckedFile(target) {
+    let handle;
+    try {
+      handle = await open(target, constants.O_RDONLY | (constants.O_NOFOLLOW || 0) | (constants.O_NONBLOCK || 0));
+    } catch (error) {
+      if (error?.code === 'ELOOP') throw new ToolError('UNSAFE_PATH', 'Symlink changed during file open');
+      throw error;
+    }
+    try {
+      const info = await handle.stat();
+      if (!info.isFile() || info.size > MAX_FILE_BYTES)
+        throw new ToolError('FILE_LIMIT', 'Expected a small regular source file');
+      const content = await handle.readFile({ encoding: 'utf8' });
+      if (Buffer.byteLength(content) > MAX_FILE_BYTES)
+        throw new ToolError('FILE_LIMIT', 'Source file exceeds size limit');
+      return content;
+    } finally { await handle.close(); }
+  }
+
   return {
     async read_project_file({ path } = {}) {
       const target = await checkedFile(path);
-      return { path, content: await readFile(target, 'utf8') };
+      return { path, content: await readCheckedFile(target) };
     },
 
     async replace_in_file({ path, oldText, newText } = {}) {
@@ -69,7 +93,7 @@ export function createProjectTools(workspaceDirectory) {
         throw new ToolError('INVALID_ARGUMENT', 'newText must be a string <= 10000 characters');
       }
       const target = await checkedFile(path);
-      const source = await readFile(target, 'utf8');
+      const source = await readCheckedFile(target);
       const occur = source.split(oldText).length - 1;
       if (occur !== 1) throw new ToolError('AMBIGUOUS_EDIT', 'Expected exactly one match; found ' + occur);
       const next = source.replace(oldText, newText);
@@ -85,7 +109,7 @@ export function createProjectTools(workspaceDirectory) {
     async run_project_check({ path, expectedText } = {}) {
       const target = await checkedFile(path);
       if (!target.endsWith('.html')) throw new ToolError('UNSUPPORTED_CHECK', 'This safe demo only checks HTML fixtures');
-      const source = await readFile(target, 'utf8');
+      const source = await readCheckedFile(target);
       const headings = [...source.matchAll(/<h1\b[^>]*>([\s\S]*?)<\/h1>/gi)];
       const expected = expectedText === undefined ? null : requireString(expectedText, 'expectedText');
       const errors = [];
