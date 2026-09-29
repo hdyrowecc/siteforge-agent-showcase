@@ -41,8 +41,11 @@ function send(res, status, body) {
 export function createShowcaseServer({
   liveMode = process.env.AGENT_MODE === 'live',
   modelFactory = () => liveMode ? createLiveModel() : createMockModel(),
-  coordinator = createRunCoordinator()
+  coordinator = createRunCoordinator(),
+  timeoutMs = 45_000
 } = {}) {
+  if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1)
+    throw new RangeError('timeoutMs must be a positive integer');
   return createServer(async (req, res) => {
     if (req.url === '/health' && req.method === 'GET') return send(res, 200, { ok: true });
     if (req.url !== '/agent/run' || req.method !== 'POST')
@@ -80,14 +83,14 @@ export function createShowcaseServer({
     const run = async () => {
       const workspace = await mkdtemp(join(tmpdir(), 'agent-api-'));
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 45_000);
+      const timeout = setTimeout(() => controller.abort({ code: 'DEADLINE_EXCEEDED' }), timeoutMs);
       try {
         await cp(FIXTURE_DIR, workspace, { recursive: true });
         const result = await runAgent({
           instruction, model: modelFactory(), tools: createProjectTools(workspace),
           requiredChecks: checks, signal: controller.signal
         });
-        const status = liveMode
+        const status = result.status === 'timed_out' ? 'timed_out' : liveMode
           ? result.status === 'verified' ? 'contract_verified' : 'unverified'
           : result.status === 'verified' ? 'demo_verified' : 'demo_unverified';
         return {
@@ -109,7 +112,7 @@ export function createShowcaseServer({
       const result = await coordinator.executeOnce(key, {
         instruction, liveMode, checks
       }, run);
-      return send(res, 200, result);
+      return send(res, result.status === 'timed_out' ? 504 : 200, result);
     } catch (error) {
       const code = typeof error?.code === 'string' && /^[A-Z_]{3,48}$/.test(error.code)
         ? error.code : 'RUN_FAILED';
