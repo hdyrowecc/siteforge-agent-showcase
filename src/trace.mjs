@@ -110,23 +110,42 @@ export function analyzeTrace(trace) {
     const phase = phases.find(p => active.some(s => s.phase === p)) || 'other';
     attribution[phase] += points[i] - points[i - 1];
   }
-  const known = valid.filter(s => s.phase === 'model' &&
-    (Number.isSafeInteger(s.attributes?.inputTokens) || Number.isSafeInteger(s.attributes?.outputTokens)));
-  const totals = known.reduce((out, s) => {
-    out.inputTokens += s.attributes?.inputTokens || 0;
-    out.outputTokens += s.attributes?.outputTokens || 0;
-    return out;
-  }, { inputTokens: 0, outputTokens: 0 });
+  const modelSpans = valid.filter(s => s.phase === 'model');
+  const recorded = key => {
+    const withMetric = modelSpans.filter(s => Number.isSafeInteger(s.attributes?.[key]) && s.attributes[key] >= 0);
+    const known = withMetric.reduce((sum, s) => sum + s.attributes[key], 0);
+    return {
+      value: modelSpans.length > 0 && withMetric.length === modelSpans.length ? known : null,
+      known: withMetric.length > 0 ? known : null,
+      count: withMetric.length
+    };
+  };
+  const input = recorded('inputTokens');
+  const output = recorded('outputTokens');
+  const completeSpans = modelSpans.filter(s =>
+    Number.isSafeInteger(s.attributes?.inputTokens) && s.attributes.inputTokens >= 0 &&
+    Number.isSafeInteger(s.attributes?.outputTokens) && s.attributes.outputTokens >= 0).length;
+  const completeness = modelSpans.length > 0 && completeSpans === modelSpans.length ? 'complete'
+    : input.count > 0 || output.count > 0 ? 'partial' : 'unrecorded';
 
   return {
     durationMs: Math.round(total),
     wallTimeMs: Object.fromEntries(Object.entries(attribution).map(([k, v]) => [k, Math.round(v)])),
     failedToolCalls: valid.filter(s => s.phase === 'tool' && s.attributes?.outcome === 'failure').length,
     failedModelAttempts: valid.filter(s => s.phase === 'model' && s.attributes?.outcome === 'failure').length,
-    tokenUsage: known.length ? { ...totals, totalTokens: totals.inputTokens + totals.outputTokens,
-      recordedModelSpans: known.length, modelSpans: valid.filter(s => s.phase === 'model').length } :
-      { inputTokens: null, outputTokens: null, totalTokens: null, recordedModelSpans: 0,
-        modelSpans: valid.filter(s => s.phase === 'model').length },
+    tokenUsage: {
+      inputTokens: input.value,
+      outputTokens: output.value,
+      totalTokens: input.value !== null && output.value !== null ? input.value + output.value : null,
+      // Partial sums are labeled as known quantities, never reported as exact totals.
+      knownInputTokens: input.known,
+      knownOutputTokens: output.known,
+      recordedInputSpans: input.count,
+      recordedOutputSpans: output.count,
+      recordedModelSpans: completeSpans,
+      modelSpans: modelSpans.length,
+      completeness
+    },
     discardedSpans: Math.max(0, Number(trace?.discardedSpans) || 0)
   };
 }
