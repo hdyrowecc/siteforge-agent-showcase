@@ -19,6 +19,10 @@ jobs:
           node-version: ${{ matrix.node-version }}
       - run: npm run test:coverage
       - run: npm run check
+      - run: npm run demo:basic
+      - run: npm run demo
+      - run: npm run demo -- --scenario=repair
+      - run: npm run demo -- --scenario=idempotency
       - run: npm run trace:demo
       - run: npm run trace:synthetic
       - run: npm run eval:demo
