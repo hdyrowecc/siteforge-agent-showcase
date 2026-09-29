@@ -61,7 +61,8 @@ export async function runAgent({ instruction, model, tools, requiredChecks = [],
     if (actions.length === 0) {
       const evidence = completionEvidence();
       return {
-        status: evidence.verified ? 'verified' : 'unverified',
+        status: evidence.verified ? 'verified'
+          : evidence.selfChecked && !evidence.contractProvided ? 'self_checked' : 'unverified',
         answer: String(decision.text || (evidence.verified ? 'Verified.' : 'Insufficient verification evidence.')),
         verification: evidence, trace, calls, turns: turn
       };
