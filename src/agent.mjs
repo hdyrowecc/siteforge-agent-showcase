@@ -104,7 +104,7 @@ export async function runAgent({ instruction, model, tools, requiredChecks = [],
       const startedAt = Date.now();
       let outcome;
       try {
-        if (signal?.aborted) return { status: 'cancelled', trace, calls, turns: turn };
+        if (signal?.aborted) return stopped(turn);
         const schema = TOOL_SCHEMAS.find(s => s.function.name === action.name);
         if (!schema || typeof tools[action.name] !== 'function') throw new ToolError('UNKNOWN_TOOL', 'Tool is not available');
         const args = action.args;
@@ -115,6 +115,7 @@ export async function runAgent({ instruction, model, tools, requiredChecks = [],
         for (const [key, val] of Object.entries(args))
           if (!(key in props) || typeof val !== 'string') throw new ToolError('INVALID_ARGUMENT', 'Unexpected or invalid ' + key);
         const value = await tools[action.name](args);
+        if (signal?.aborted) return stopped(turn);
         outcome = { ok: true, value };
         if (action.name === 'replace_in_file' && value?.changed === true) {
           editedFiles.add(args.path);
