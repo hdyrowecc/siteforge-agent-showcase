@@ -1,6 +1,6 @@
 import { mkdtemp, cp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runAgent } from '../src/agent.mjs';
 import { createMockModel } from '../src/provider.mjs';
@@ -59,7 +59,7 @@ export function syntheticRetryExample() {
   return { trace, analysis: analyzeTrace(trace) };
 }
 
-if (process.argv[1] && fileURLToPath(import.meta.url) === fileURLToPath(new URL('file://' + process.argv[1].replace(/\\/g, '/')))) {
+if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1])) {
   const result = process.argv.includes('--synthetic') ? syntheticRetryExample() : await runObservedDemo();
   console.log(JSON.stringify(result, null, 2));
   if (result.outcome && result.outcome !== 'verified') process.exitCode = 1;
