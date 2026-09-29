@@ -17,7 +17,8 @@ export async function runObservedDemo() {
     const run = await runAgent({
       instruction: 'Read the synthetic fixture, make an exact H1 edit, verify the result.',
       model: observeModel(createMockModel(), trace),
-      tools: observeTools(tools, trace)
+      tools: observeTools(tools, trace),
+      requiredChecks: [{ path: 'index.html', expectedText: 'Welcome to the AI Agent Showcase' }]
     });
     const finalCheck = await trace.capture('verification', { check: 'expected_h1' }, async () => {
       const html = await readFile(join(workspace, 'index.html'), 'utf8');
