@@ -81,7 +81,11 @@ export async function runShowcase(mode = 'multi-page') {
     await cp(fileURLToPath(new URL('./site/', import.meta.url)), dir, { recursive: true });
     const run = await runAgent({
       instruction: mode === 'multi-page' ? 'Update both page headings and hero color; preserve existing navigation, CTA, footer and styles.' : 'Respond to edit ambiguity with a smaller edit and verify.',
-      model: plannedModel(mode), tools: createProjectTools(dir), maxTurns: 8, maxToolCalls: 12
+      model: plannedModel(mode), tools: createProjectTools(dir),
+      requiredChecks: mode === 'multi-page'
+        ? [{ path: 'index.html', expectedText: 'Build With AI' }, { path: 'about.html', expectedText: 'Our Process' }]
+        : [{ path: 'index.html', expectedText: 'Recovered Home' }],
+      maxTurns: 8, maxToolCalls: 12
     });
     const [home, about, css] = await Promise.all(['index.html', 'about.html', 'styles.css'].map(p => readFile(join(dir, p), 'utf8')));
     const check = mode === 'multi-page' ? preservationCheck(home, about, css) : null;
