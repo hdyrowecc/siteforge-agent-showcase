@@ -47,11 +47,24 @@
 
 [直接查看可阅读的耗时拆解与 Eval 结果表](docs/evidence-report.md) · [理解设计及真实性边界](docs/trace-and-eval.md)。最新 GitHub Actions 会上传可下载的离线 JSON 报告。Trace 的虚构示意数据与离线脚本结果均**不是生产任务的性能指标，也不是线上 Agent 成功率**。
 
+## 本地 API：清楚区分演示通过与用户目标达成
+
+运行 `npm start`，本地 API 默认只监听 `127.0.0.1:3001`。调用 `POST /agent/run` 时，普通离线模式会执行**固定的合成 HTML 修改脚本**：即使提交了不同的自然语言描述，返回的 `demo_verified` 也仅表示固定演示通过，**不表示该输入的目标已实现**。
+
+可选的 `AGENT_MODE=live` 模式需要单独配置模型密钥，并要求调用方提交明确的 `requiredChecks`（本仓库单页示例只支持 `index.html` 的 H1 检查），例如：
+
+`{"instruction":"把首页主标题改为 My Portfolio","requiredChecks":[{"path":"index.html","expectedText":"My Portfolio"}]}`
+
+只有声明的检查全部通过，接口才会返回 `contract_verified`；它验证的是**调用方声明的 HTML 检查范围**，不是完整网站质量、视觉效果或任意自然语言需求。没有检查契约的 live 请求会被拒绝。
+
+单进程请求协调器会限制所有执行中的请求，包括没有客户端请求 ID 的请求；达到上限时返回 `503 RUN_CAPACITY_EXCEEDED` 和 `Retry-After`。这不是生产级多实例任务队列。Trace 的部分 Token 数据也会标注为 `partial`，不会把未知消耗误作零。
+
 ## 本地运行
 
 需要 Node.js 20 或更高版本；零运行时依赖。
 
     npm test
+    npm run test:coverage
     npm run check
     npm run demo
     npm run demo -- --scenario=repair
